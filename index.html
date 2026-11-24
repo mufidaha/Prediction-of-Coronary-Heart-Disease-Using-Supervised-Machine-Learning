@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heart Disease Risk Models</title>
+<style>:root{color-scheme:light;--bg:#fcfcfb;--card:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--ink3:#8a8984;--rule:#e6e5e0;--grid:#efeee9;
+--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--q1:#cde2fb;--q7:#0d366b}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme=light])){color-scheme:dark;--bg:#1a1a19;--card:#222220;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#8f8e86;--rule:#3a3936;--grid:#2c2b29;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--q1:#1f2c3d;--q7:#9ec5f4}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#1a1a19;--card:#222220;--ink:#f0efec;--ink2:#c3c2b7;--ink3:#8f8e86;--rule:#3a3936;--grid:#2c2b29;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--q1:#1f2c3d;--q7:#9ec5f4}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Source Sans 3","Segoe UI",system-ui,sans-serif}
+header{padding:32px max(5vw,16px) 8px;max-width:1240px;margin:auto}
+header a{color:var(--ink2);font-size:14px}
+h1{font:600 clamp(28px,4vw,40px)/1.1 "Source Serif 4",Georgia,serif;margin:10px 0 8px;text-wrap:balance}
+.lede{color:var(--ink2);max-width:70ch;margin:0}
+main{max-width:1240px;margin:auto;padding:8px max(5vw,16px) 48px;display:grid;gap:20px;grid-template-columns:repeat(12,minmax(0,1fr))}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;grid-column:span 12}
+.half{grid-column:span 6}.third{grid-column:span 4}.quarter{grid-column:span 3}
+@media(max-width:860px){.half,.third,.quarter{grid-column:span 12}}
+h2{font:600 18px/1.3 "Source Serif 4",Georgia,serif;margin:0 0 4px}
+.sub{color:var(--ink2);font-size:14px;margin:0 0 12px}
+.kpi .v{font:600 clamp(28px,3.4vw,40px)/1.1 "Source Serif 4",Georgia,serif}
+.kpi .l{color:var(--ink2);font-size:14px}
+.fig{position:relative;min-height:300px}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.scroll{overflow-x:auto}
+.note{font-size:14px;color:var(--ink2)}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:6px 8px;border-radius:6px;opacity:0;transition:opacity .1s;z-index:9;max-width:260px}
+details summary{cursor:pointer;color:var(--ink2);font-size:14px}
+footer{max-width:1240px;margin:auto;padding:0 max(5vw,16px) 40px;color:var(--ink3);font-size:13px}
+</style></head><body>
+<header>
+<a href="https://github.com/mufidaha">Mufidah Abdulkadir, MSHI · Portfolio</a>
+<h1>Age and tobacco lead heart disease risk, and accuracy alone hides a weak model</h1>
+<p class="lede">Six supervised models compared on 462 patients from the public South African Heart Disease dataset, using the same 70/30 split as my original notebook. Accuracy alone hides a big problem: one model looks accurate but catches almost no CHD cases.</p>
+</header>
+<main>
+<div class="card quarter kpi"><div class="v" id="k1"></div><div class="l">patients in the dataset</div></div>
+<div class="card quarter kpi"><div class="v" id="k2"></div><div class="l">have coronary heart disease</div></div>
+<div class="card quarter kpi"><div class="v" id="k3"></div><div class="l">best AUC (logistic regression)</div></div>
+<div class="card quarter kpi"><div class="v">0</div><div class="l">missing values to clean</div></div>
+<section class="card half"><h2>Model comparison</h2><p class="sub">Sorted by AUC on the 139-patient test set. Recall = share of true CHD cases the model caught.</p>
+<div class="scroll"><table><thead><tr><th>Model</th><th class="n">AUC</th><th class="n">Accuracy</th><th class="n">Precision</th><th class="n">Recall</th></tr></thead><tbody id="mt"></tbody></table></div>
+<p class="note" id="svmnote"></p></section>
+<section class="card half"><h2>ROC curves, top three models</h2><p class="sub">Higher and further left is better. Dashed line = random guessing.</p>
+<div class="legend" id="rocleg"></div><div class="fig" id="roc"><svg></svg></div></section>
+<section class="card half"><h2>What drives the random forest</h2><p class="sub">Feature importance (share of the model's decisions).</p><div id="imp"></div></section>
+<section class="card half"><h2>CHD rate climbs with age</h2><p class="sub">Share of patients with CHD by age group (n per group shown).</p><div id="age"></div>
+<p class="note" id="fam"></p></section>
+<section class="card"><h2>How I built it</h2>
+<p class="note">Python (pandas, scikit-learn, XGBoost). Checked the data for missing values (none), encoded family history as 0/1, split 70/30 (random_state=7), trained decision tree, SVM, random forest, logistic regression, k-nearest neighbors and XGBoost, then compared accuracy, AUC, precision and recall. My original class notebook chose the random forest on accuracy (69.8%); re-running with AUC and recall shows logistic regression ranks patients slightly better and that SVM's accuracy is misleading. This is a teaching dataset, not a clinical tool.</p>
+<details><summary>Data source</summary><p class="note">South African Heart Disease data (Rousseauw et al., 1983), as distributed with <i>The Elements of Statistical Learning</i>. 462 male patients, 9 risk factors. Re-run November 2026.</p></details>
+</section>
+</main>
+<footer>Built by Mufidah Abdulkadir · <a href="https://github.com/mufidaha/Prediction-of-Coronary-Heart-Disease-Using-Supervised-Machine-Learning">Code on GitHub</a></footer>
+<div class="tip" id="tip"></div>
+<script>
+{
+const D={
+ "n": 462,
+ "chd": 160,
+ "test": 139,
+ "models": [
+  {
+   "model": "Logistic Regression",
+   "accuracy": 0.691,
+   "auc": 0.745,
+   "precision": 0.488,
+   "recall": 0.5,
+   "f1": 0.494,
+   "cm": [
+    [
+     75,
+     22
+    ],
+    [
+     21,
+     21
+    ]
+   ]
+  },
+  {
+   "model": "Support Vector Machine",
+   "accuracy": 0.712,
+   "auc": 0.738,
+   "precision": 0.75,
+   "recall": 0.071,
+   "f1": 0.13,
+   "cm": [
+    [
+     96,
+     1
+    ],
+    [
+     39,
+     3
+    ]
+   ]
+  },
+  {
+   "model": "Random Forest",
+   "accuracy": 0.691,
+   "auc": 0.727,
+   "precision": 0.489,
+   "recall": 0.524,
+   "f1": 0.506,
+   "cm": [
+    [
+     74,
+     23
+    ],
+    [
+     20,
+     22
+    ]
+   ]
+  },
+  {
+   "model": "XGBoost",
+   "accuracy": 0.712,
+   "auc": 0.713,
+   "precision": 0.52,
+   "recall": 0.619,
+   "f1": 0.565,
+   "cm": [
+    [
+     73,
+     24
+    ],
+    [
+     16,
+     26
+    ]
+   ]
+  },
+  {
+   "model": "K-Nearest Neighbors (k=3)",
+   "accuracy": 0.619,
+   "auc": 0.636,
+   "precision": 0.351,
+   "recall": 0.31,
+   "f1": 0.329,
+   "cm": [
+    [
+     73,
+     24
+    ],
+    [
+     29,
+     13
+    ]
+   ]
+  },
+  {
+   "model": "Decision Tree",
+   "accuracy": 0.662,
+   "auc": 0.636,
+   "precision": 0.453,
+   "recall": 0.571,
+   "f1": 0.505,
+   "cm": [
+    [
+     68,
+     29
+    ],
+    [
+     18,
+     24
+    ]
+   ]
+  }
+ ],
+ "roc": {
+  "Random Forest": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.024
+   ],
+   [
+    0.021,
+    0.071
+   ],
+   [
+    0.031,
+    0.095
+   ],
+   [
+    0.031,
+    0.143
+   ],
+   [
+    0.052,
+    0.167
+   ],
+   [
+    0.052,
+    0.238
+   ],
+   [
+    0.062,
+    0.238
+   ],
+   [
+    0.082,
+    0.286
+   ],
+   [
+    0.082,
+    0.405
+   ],
+   [
+    0.093,
+    0.429
+   ],
+   [
+    0.113,
+    0.452
+   ],
+   [
+    0.155,
+    0.476
+   ],
+   [
+    0.175,
+    0.476
+   ],
+   [
+    0.186,
+    0.524
+   ],
+   [
+    0.237,
+    0.524
+   ],
+   [
+    0.247,
+    0.548
+   ],
+   [
+    0.268,
+    0.571
+   ],
+   [
+    0.299,
+    0.595
+   ],
+   [
+    0.309,
+    0.619
+   ],
+   [
+    0.351,
+    0.667
+   ],
+   [
+    0.412,
+    0.714
+   ],
+   [
+    0.433,
+    0.714
+   ],
+   [
+    0.454,
+    0.738
+   ],
+   [
+    0.485,
+    0.762
+   ],
+   [
+    0.505,
+    0.762
+   ],
+   [
+    0.515,
+    0.786
+   ],
+   [
+    0.567,
+    0.786
+   ],
+   [
+    0.588,
+    0.81
+   ],
+   [
+    0.619,
+    0.881
+   ],
+   [
+    0.691,
+    0.905
+   ],
+   [
+    0.742,
+    0.905
+   ],
+   [
+    0.763,
+    0.929
+   ],
+   [
+    0.794,
+    1.0
+   ],
+   [
+    0.804,
+    1.0
+   ],
+   [
+    0.845,
+    1.0
+   ],
+   [
+    0.876,
+    1.0
+   ],
+   [
+    0.918,
+    1.0
+   ],
+   [
+    0.969,
+    1.0
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "Logistic Regression": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.024
+   ],
+   [
+    0.0,
+    0.119
+   ],
+   [
+    0.01,
+    0.119
+   ],
+   [
+    0.01,
+    0.143
+   ],
+   [
+    0.021,
+    0.19
+   ],
+   [
+    0.031,
+    0.19
+   ],
+   [
+    0.031,
+    0.333
+   ],
+   [
+    0.062,
+    0.333
+   ],
+   [
+    0.062,
+    0.405
+   ],
+   [
+    0.072,
+    0.429
+   ],
+   [
+    0.093,
+    0.429
+   ],
+   [
+    0.093,
+    0.5
+   ],
+   [
+    0.237,
+    0.5
+   ],
+   [
+    0.237,
+    0.571
+   ],
+   [
+    0.299,
+    0.595
+   ],
+   [
+    0.32,
+    0.595
+   ],
+   [
+    0.32,
+    0.619
+   ],
+   [
+    0.33,
+    0.619
+   ],
+   [
+    0.33,
+    0.667
+   ],
+   [
+    0.371,
+    0.714
+   ],
+   [
+    0.412,
+    0.714
+   ],
+   [
+    0.412,
+    0.738
+   ],
+   [
+    0.433,
+    0.738
+   ],
+   [
+    0.433,
+    0.762
+   ],
+   [
+    0.505,
+    0.786
+   ],
+   [
+    0.546,
+    0.786
+   ],
+   [
+    0.546,
+    0.833
+   ],
+   [
+    0.557,
+    0.833
+   ],
+   [
+    0.557,
+    0.857
+   ],
+   [
+    0.588,
+    0.881
+   ],
+   [
+    0.608,
+    0.881
+   ],
+   [
+    0.608,
+    0.905
+   ],
+   [
+    0.66,
+    0.905
+   ],
+   [
+    0.66,
+    0.929
+   ],
+   [
+    0.67,
+    0.952
+   ],
+   [
+    0.825,
+    0.952
+   ],
+   [
+    0.825,
+    0.976
+   ],
+   [
+    0.835,
+    0.976
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "XGBoost": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.024
+   ],
+   [
+    0.0,
+    0.071
+   ],
+   [
+    0.01,
+    0.071
+   ],
+   [
+    0.041,
+    0.143
+   ],
+   [
+    0.041,
+    0.167
+   ],
+   [
+    0.062,
+    0.167
+   ],
+   [
+    0.062,
+    0.214
+   ],
+   [
+    0.072,
+    0.286
+   ],
+   [
+    0.144,
+    0.286
+   ],
+   [
+    0.144,
+    0.31
+   ],
+   [
+    0.165,
+    0.31
+   ],
+   [
+    0.175,
+    0.429
+   ],
+   [
+    0.175,
+    0.476
+   ],
+   [
+    0.186,
+    0.476
+   ],
+   [
+    0.186,
+    0.5
+   ],
+   [
+    0.206,
+    0.619
+   ],
+   [
+    0.268,
+    0.619
+   ],
+   [
+    0.268,
+    0.643
+   ],
+   [
+    0.381,
+    0.643
+   ],
+   [
+    0.392,
+    0.667
+   ],
+   [
+    0.392,
+    0.714
+   ],
+   [
+    0.412,
+    0.714
+   ],
+   [
+    0.412,
+    0.738
+   ],
+   [
+    0.474,
+    0.762
+   ],
+   [
+    0.515,
+    0.762
+   ],
+   [
+    0.515,
+    0.786
+   ],
+   [
+    0.526,
+    0.786
+   ],
+   [
+    0.536,
+    0.81
+   ],
+   [
+    0.536,
+    0.833
+   ],
+   [
+    0.598,
+    0.833
+   ],
+   [
+    0.598,
+    0.857
+   ],
+   [
+    0.619,
+    0.881
+   ],
+   [
+    0.67,
+    0.881
+   ],
+   [
+    0.67,
+    0.905
+   ],
+   [
+    0.742,
+    0.905
+   ],
+   [
+    0.784,
+    0.929
+   ],
+   [
+    0.784,
+    0.952
+   ],
+   [
+    0.907,
+    0.952
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "Support Vector Machine": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.024
+   ],
+   [
+    0.01,
+    0.024
+   ],
+   [
+    0.021,
+    0.119
+   ],
+   [
+    0.021,
+    0.19
+   ],
+   [
+    0.031,
+    0.19
+   ],
+   [
+    0.082,
+    0.262
+   ],
+   [
+    0.082,
+    0.286
+   ],
+   [
+    0.093,
+    0.286
+   ],
+   [
+    0.113,
+    0.31
+   ],
+   [
+    0.113,
+    0.357
+   ],
+   [
+    0.134,
+    0.357
+   ],
+   [
+    0.144,
+    0.381
+   ],
+   [
+    0.144,
+    0.429
+   ],
+   [
+    0.155,
+    0.429
+   ],
+   [
+    0.196,
+    0.452
+   ],
+   [
+    0.196,
+    0.5
+   ],
+   [
+    0.227,
+    0.5
+   ],
+   [
+    0.237,
+    0.524
+   ],
+   [
+    0.237,
+    0.548
+   ],
+   [
+    0.268,
+    0.548
+   ],
+   [
+    0.278,
+    0.571
+   ],
+   [
+    0.278,
+    0.619
+   ],
+   [
+    0.299,
+    0.619
+   ],
+   [
+    0.32,
+    0.643
+   ],
+   [
+    0.32,
+    0.667
+   ],
+   [
+    0.33,
+    0.667
+   ],
+   [
+    0.371,
+    0.69
+   ],
+   [
+    0.371,
+    0.738
+   ],
+   [
+    0.381,
+    0.738
+   ],
+   [
+    0.526,
+    0.762
+   ],
+   [
+    0.526,
+    0.81
+   ],
+   [
+    0.546,
+    0.81
+   ],
+   [
+    0.577,
+    0.857
+   ],
+   [
+    0.577,
+    0.881
+   ],
+   [
+    0.608,
+    0.881
+   ],
+   [
+    0.67,
+    0.929
+   ],
+   [
+    0.67,
+    0.976
+   ],
+   [
+    0.784,
+    0.976
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "K-Nearest Neighbors (k=3)": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.062,
+    0.095
+   ],
+   [
+    0.247,
+    0.31
+   ],
+   [
+    0.546,
+    0.857
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "Decision Tree": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.299,
+    0.571
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ]
+ },
+ "importance": [
+  [
+   "Age",
+   0.174
+  ],
+  [
+   "Tobacco (kg lifetime)",
+   0.15
+  ],
+  [
+   "LDL cholesterol",
+   0.129
+  ],
+  [
+   "Type-A behavior",
+   0.113
+  ],
+  [
+   "Adiposity",
+   0.11
+  ],
+  [
+   "Obesity (BMI)",
+   0.105
+  ],
+  [
+   "Systolic BP",
+   0.091
+  ],
+  [
+   "Alcohol",
+   0.074
+  ],
+  [
+   "Family history",
+   0.053
+  ]
+ ],
+ "byage": [
+  [
+   "15\u201329",
+   6.9,
+   101
+  ],
+  [
+   "30\u201339",
+   28.0,
+   75
+  ],
+  [
+   "40\u201349",
+   31.1,
+   106
+  ],
+  [
+   "50\u201359",
+   57.8,
+   116
+  ],
+  [
+   "60\u201364",
+   50.0,
+   64
+  ]
+ ],
+ "famhist": [
+  23.7,
+  50.0
+ ],
+ "missing": 0
+};
+const $=id=>document.getElementById(id), tip=$('tip');
+const pct=x=>(x*100).toFixed(1)+'%';
+const show=(e,h)=>{tip.innerHTML=h;tip.style.opacity=1;tip.style.left=Math.min(e.clientX+12,innerWidth-270)+'px';tip.style.top=(e.clientY+12)+'px'};
+const hide=()=>tip.style.opacity=0;
+$('k1').textContent=D.n; $('k2').textContent=D.chd+' ('+Math.round(D.chd/D.n*100)+'%)'; $('k3').textContent=D.models[0].auc.toFixed(2);
+$('mt').innerHTML=D.models.map(m=>`<tr><td>${m.model}</td><td class="n">${m.auc.toFixed(3)}</td><td class="n">${pct(m.accuracy)}</td><td class="n">${pct(m.precision)}</td><td class="n">${pct(m.recall)}</td></tr>`).join('');
+const svm=D.models.find(m=>/Support/.test(m.model));
+$('svmnote').textContent=`SVM has the highest accuracy (${pct(svm.accuracy)}) but recall of only ${pct(svm.recall)}: it mostly predicts "no CHD". On imbalanced health data, AUC and recall matter more than accuracy.`;
+const cols=['var(--s1)','var(--s2)','var(--s3)'], top=D.models.slice(0,3);
+$('rocleg').innerHTML=top.map((m,i)=>`<span><i style="background:${cols[i]}"></i>${m.model} (AUC ${m.auc.toFixed(2)})</span>`).join('');
+const s=document.querySelector('#roc svg');
+const draw=()=>{const W=s.clientWidth,H=s.clientHeight,p={l:40,r:12,t:10,b:34},w=W-p.l-p.r,h=H-p.t-p.b;
+ const X=v=>p.l+v*w,Y=v=>p.t+(1-v)*h; let g='';
+ for(let v=0;v<=1;v+=0.25){g+=`<line x1="${X(0)}" x2="${X(1)}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${p.l-6}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="var(--ink3)">${v}</text><text x="${X(v)}" y="${H-18}" font-size="11" text-anchor="middle" fill="var(--ink3)">${v}</text>`}
+ g+=`<text x="${X(.5)}" y="${H-3}" font-size="11" text-anchor="middle" fill="var(--ink2)">False positive rate</text>`;
+ g+=`<line x1="${X(0)}" y1="${Y(0)}" x2="${X(1)}" y2="${Y(1)}" stroke="var(--ink3)" stroke-dasharray="4 4"/>`;
+ top.slice().reverse().forEach((m,ri)=>{const i=2-ri;g+=`<polyline fill="none" stroke="${cols[i]}" stroke-width="2" stroke-linejoin="round" points="${D.roc[m.model].map(([a,b])=>X(a)+','+Y(b)).join(' ')}"/>`});
+ g+=`<rect id="rochit" x="${p.l}" y="${p.t}" width="${w}" height="${h}" fill="transparent"/>`;
+ s.innerHTML=g;
+ s.querySelector('#rochit').onmousemove=e=>{const r=s.getBoundingClientRect(),fx=Math.max(0,Math.min(1,(e.clientX-r.left-p.l)/w));
+  show(e,`At FPR ${fx.toFixed(2)}:<br>`+top.map(m=>{const pts=D.roc[m.model];let best=pts[0];for(const q of pts) if(q[0]<=fx) best=q;return `${m.model}: TPR ${best[1].toFixed(2)}`}).join('<br>'))};
+ s.querySelector('#rochit').onmouseleave=hide;};
+new ResizeObserver(draw).observe(s);
+const bars=(el,rows,fmt,max)=>{$(el).innerHTML=rows.map(r=>`<div style="display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr) 64px;gap:8px;align-items:center;margin:6px 0;font-size:14px" data-t="${r.t}"><span>${r.k}</span><span style="background:var(--grid);border-radius:4px;height:14px"><span style="display:block;height:14px;border-radius:4px;background:var(--s1);width:${r.v/max*100}%"></span></span><span style="text-align:right;font-variant-numeric:tabular-nums">${fmt(r.v)}</span></div>`).join('');
+ $(el).querySelectorAll('[data-t]').forEach(d=>{d.onmousemove=e=>show(e,d.dataset.t);d.onmouseleave=hide})};
+bars('imp',D.importance.map(([k,v])=>({k,v,t:`${k}: ${(v*100).toFixed(1)}% of importance`})),v=>(v*100).toFixed(1)+'%',D.importance[0][1]);
+bars('age',D.byage.map(([k,v,n])=>({k:k+' (n='+n+')',v,t:`Age ${k}: ${v}% of ${n} patients have CHD`})),v=>v+'%',100);
+$('fam').textContent=`Family history matters too: ${D.famhist[1]}% of patients with a family history have CHD, vs ${D.famhist[0]}% without.`;
+}
+</script></body></html>

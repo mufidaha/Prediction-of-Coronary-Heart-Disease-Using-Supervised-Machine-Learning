@@ -1,27 +1,36 @@
 # Prediction of Coronary Heart Disease Using Supervised Machine Learning
 
-## Description
-This project uses supervised machine learning to predict Coronary Heart Disease from clinical data. It guides you through data preparation, model training, and evaluation to provide hands-on experience in building and understanding models that support early CHD detection.
+**[📊 View the interactive dashboard](https://mufidaha.github.io/Prediction-of-Coronary-Heart-Disease-Using-Supervised-Machine-Learning/)**
 
-## Objective
-Gain practical experience applying the machine learning lifecycle to create and evaluate models predicting Coronary Heart Disease.
+## The question
+Which risk factors are linked to coronary heart disease (CHD), and which model best identifies patients who have it?
 
-## Features
-- Data preprocessing  
-- Training multiple supervised learning models  
-- Model evaluation and comparison  
+## Key findings
+- **Age, lifetime tobacco use and LDL cholesterol** are the strongest drivers in the random forest model.
+- CHD rate climbs from **7% (ages 15–29) to 58% (ages 50–59)**; patients with a family history have CHD at about twice the rate (50% vs 24%).
+- **Accuracy can mislead on imbalanced health data:** the SVM had the highest accuracy (71%) but caught only **7% of CHD cases**. Logistic regression had the best AUC (0.745) with 50% recall.
 
-## Technologies
-- Python  
-- scikit-learn  
-- pandas  
-- Jupyter Notebook  
+## Data
+South African Heart Disease dataset (462 patients, 9 risk factors, 35% with CHD; public, distributed with *The Elements of Statistical Learning*). No missing values.
 
-## Usage
-1. Clone the repository  
-2. Install dependencies from `requirements.txt`  
-3. Run the Jupyter notebook to follow the workflow step-by-step  
+## Method
+1. Load and profile the data (shape, types, missing values, distributions, correlation heatmap)
+2. Encode family history, split 70/30 (`random_state=7`)
+3. Train decision tree, SVM, random forest, logistic regression, k-nearest neighbors and XGBoost
+4. Compare accuracy, AUC, precision and recall; review feature importance
 
-## References
-- [American Heart Association](https://www.heart.org)  
-- Relevant scientific literature on CHD and machine learning
+| Model | AUC | Accuracy | Recall |
+|---|---|---|---|
+| Logistic Regression | 0.745 | 69.1% | 50.0% |
+| Support Vector Machine | 0.738 | 71.2% | 7.1% |
+| Random Forest | 0.727 | 69.1% | 52.4% |
+| XGBoost | 0.713 | 71.2% | 61.9% |
+
+## Files
+- `MA_CHDMLPRED-2.ipynb` — original notebook (Google Colab)
+- `index.html` — dashboard (served by GitHub Pages)
+
+## Tools
+Python · pandas · scikit-learn · XGBoost · matplotlib/seaborn · Jupyter
+
+*This is a learning project on a teaching dataset, not a clinical tool.*
