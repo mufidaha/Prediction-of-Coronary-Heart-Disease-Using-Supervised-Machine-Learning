@@ -1,6 +1,6 @@
 # Prediction of Coronary Heart Disease Using Supervised Machine Learning
 
-**[📊 View the interactive dashboard](https://mufidaha.github.io/Prediction-of-Coronary-Heart-Disease-Using-Supervised-Machine-Learning/)**
+**[📊 View the interactive Tableau dashboard](https://public.tableau.com/app/profile/mufidah.abdulkadir1242/viz/PredictingCoronaryHeartDisease/CHDDashboard)**
 
 ## The question
 Which risk factors are linked to coronary heart disease (CHD), and which model best identifies patients who have it?
@@ -28,9 +28,9 @@ South African Heart Disease dataset (462 patients, 9 risk factors, 35% with CHD;
 
 ## Files
 - `MA_CHDMLPRED-2.ipynb` — original notebook (Google Colab)
-- `index.html` — dashboard (served by GitHub Pages)
+- `index.html` — page that embeds the Tableau Public dashboard (served by GitHub Pages)
 
 ## Tools
-Python · pandas · scikit-learn · XGBoost · matplotlib/seaborn · Jupyter
+Python · pandas · scikit-learn · XGBoost · matplotlib/seaborn · Jupyter · Tableau Public
 
 *This is a learning project on a teaching dataset, not a clinical tool.*
